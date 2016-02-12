@@ -1,5 +1,3 @@
-Zhongyi Luo ID:903141808
-contact: 470-985-6411 zluo60@gatech.edu
 
 All the related code is in code/ directory;
 The illustration of code is in README file in code/directory;
