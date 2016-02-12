@@ -1,0 +1,447 @@
+<html>
+<head>
+<title>Computer Vision Project</title>
+<link href='http://fonts.googleapis.com/css?family=Nunito:300|Crimson+Text|Droid+Sans+Mono' rel='stylesheet' type='text/css'>
+<link rel="stylesheet" title="Default" href="styles/github.css">
+<script src="http://ajax.googleapis.com/ajax/libs/jquery/1.3.2/jquery.min.js"></script>  
+
+<link rel="stylesheet" href="highlighting/styles/default.css">
+<script src="highlighting/highlight.pack.js"></script>
+
+<style type="text/css">
+body {
+	margin: 0px;
+	width: 100%;
+	font-family: 'Crimson Text', serif;
+	font-size: 20px;
+	background: #fcfcfc;
+}
+h1 {
+	font-family: 'Nunito', sans-serif;
+	font-weight: normal;
+	font-size: 28px;
+	margin: 25px 0px 0px 0px;
+	text-transform: lowercase;
+
+}
+
+h2 {
+	font-family: 'Nunito', sans-serif;
+	font-weight: normal;
+	font-size: 32px;
+	margin: 15px 0px 35px 0px;
+	color: #333;	
+	word-spacing: 3px;
+}
+
+h3 {
+	font-family: 'Nunito', sans-serif;
+	font-weight: normal;
+	font-size: 26px;
+	margin: 10px 0px 10px 0px;
+	color: #333;
+	word-spacing: 2px;
+}
+h4 {
+	font-family: 'Nunito', sans-serif;
+	font-weight: normal;
+	font-size: 22px;
+	margin: 10px 0px 10px 0px;
+	color: #333;
+	word-spacing: 2px;
+}
+
+h5 {
+	font-family: 'Nunito', sans-serif;
+	font-weight: normal;
+	font-size: 18px;
+	margin: 10px 0px 10px 0px;
+	color: #111;
+	word-spacing: 2px;
+}
+
+p, li {
+	color: #444;
+}
+
+a {
+	color: #DE3737;
+}
+
+.container {
+	margin: 0px auto 0px auto;
+	width: 1160px;
+}
+
+#header {
+	background: #333;
+	width: 100%;
+}
+#tail {
+	background: #777;
+	width: 100%;
+}
+#headersub {
+	color: #ccc;
+	width: 960px;
+	margin: 0px auto 0px auto;
+	padding: 20px 0px 20px 0px;
+}
+
+.chart {
+	width: 480px;
+}
+.lol {
+	font-size: 16px;
+	color: #888;
+	font-style: italic;
+}
+.sep {
+	height: 1px;
+	width: 100%;
+	background: #999;
+	margin: 20px 0px 20px 0px;
+}
+.footer{
+	font-size: 16px;
+}
+.latex {
+	width: 100%;
+}
+
+.latex img {
+	display: block;
+	margin: 0px auto 0px auto;
+}
+
+pre {
+	font-family: 'Droid Sans Mono';
+	font-size: 14px;
+}
+
+table td {
+  text-align: center;
+  vertical-align: middle;
+}
+
+table td img {
+  text-align: center;
+  vertical-align: middle;
+}
+
+#contents a {
+}
+</style>
+<script type="text/javascript">
+    hljs.initHighlightingOnLoad();
+</script>
+</head>
+<body>
+<div id="header" >
+<div id="headersub">
+<h1>Zhongyi Luo <span style="color: #DE3737"> ID 903141808 </span></h1>
+</div>
+</div>
+<div class="container">
+
+<h2> Project 3 / Camera Calibration and Fundamental Matrix Estimation with RANSAC</h2>
+
+<div style="float: right; padding: 10px">
+<img src="3_003.jpg" width="72%"/>
+<p style="font-size: 14px">Example of epipolar line on the image.</p>
+</div>
+
+<p> 	This project focused on the camera calibration (transform between 2D points to 3D points) and solving correspondence problem through epipolar geomrtry (use 8-point algorithm to find fundamental matrix between 2D point from a pair of images). The whole project is consists of following parts: </p>
+
+<ol>
+<li> Camera calibration.</li>
+<li> Fundamental matrix for matched correspondences. </li>
+<li> SIFT matching and RANSAC. </li>
+<li> Normalization of fundamental matrix matching. </li>
+</ol>
+
+<p> 	In the first section, projection matrix is calculated to solve the transformation between matched real-world 3D and image 2D point pairs. And the center of camera is solved base on this. In the second, Fundamental matrix is built through 8-point algorithm and the given points are readily matched. In the following section, the given pairs are base on SIFT correspondence (which also contain many bad matches), and RANSAC is used to find inliers for each fundamental matrix transforms. In the image 'Mont Rush' and 'Dore Dame', good matches can be found with the third section, however, when it comes to the 'Gaudi' image pair, normalization should be done ahead in order to find reasonable matchings. </p>
+<p>		In this procedure, different threshold value are chosen to suppress bad matches in different pairs.</p>
+
+<div style="clear:both">
+<h3>PART1 camera calibration</h3>
+
+<p> 	The projection from 3D real world coordinate to image coordinate of camera system can be depicted as 'x = K [ R | t ] X'. 'K' matrix refer to the camera intrinsic matrix while R and t refer to extrinsic matrix including the affine and translation. In all there are 11 degree of freedom, M = K[R t] is scale defined. Also, since t is rotated based on the origin camera center, camera center can be obtained by -Q^(-1)*m4 (in which Q denotes first three coulums of matrix M while the m4 denotes the last coulum of it).</p>
+<p>		To solve all 11 free parameters, least square method is used based on 20 corresponding points.</p>
+<pre><code>
+...
+Num=20;
+A=zeros(Num*2,11);
+for k=1:1:(Num-1)
+    P3=Points_3D(k,:);
+    P2=Points_2D(k,:);
+    A1=[P3,1];
+    A2=-P2(1)*P3;
+    A3=-P2(2)*P3;
+    A(2*k-1,:)=[A1,0,0,0,0,A2]; % odd row of matrix A
+    A(2*k,:)=[0,0,0,0,A1,A3];	% even row of matrix B
+end
+b=[];
+for j=1:1:Num
+    b=[b,Points_2D(j,:)];
+end
+[s,v,d]=svd(A);
+M1=[(A'*A)^(-1)*A'*b';1];		%solve with least square
+%M1=[A\b';1];
+M=zeros(3,4);
+for n=1:1:3
+    M(n,:)=M1(4*(n-1)+1:4*n);
+end
+...
+</code></pre>
+<p>		Residue display:</p>
+<table border=1>
+<tr>
+<td>
+<img src="3_001.jpg" width="48%"/>
+<img src="3_002.jpg"  width="48%"/>
+</td>
+</tr>
+</table>
+<p>		Resulting projection matrix is: [0.7680  -0.4936  -0.0225   0.0071; -0.0852  -0.0913  -0.9063  -0.0877; 0.1830   0.2987  -0.0742   1.0000]</p>
+
+<p>		Camera center calculation: (resulting camera center: [ -1.5122, -2.3510, 0.2821 ])</p>
+<pre><code>
+...
+Q=M(:,1:3);
+m4=M(:,4);
+Center=-inv(Q)*m4;
+...
+</code></pre>
+
+<h3>PART2 estimate fundamental matrix</h3>
+<p>		In the second part, fundamental matrix is estimated by 20 nicely matched corresponding points (between 2D points of different image). Fundamental matrix is induced from epipolar geometry: firstly use inverse of calibration matrix to set first camera coordinate system to world coordinate; find transformation matrix between the two converted corresponding 3D points; According to co-planar relationship between epipolar and base lines, get essential matrix E=[t]xR; at last, for the cases that intrinsic matrix K is not known, we have  xt*F*x'=0 (in which F= K^(-t)*E*K^K'^(-1)). </p>
+<pre><code>
+...
+ua=Points_a(:,1); %x coordinates of points in image a
+va=Points_a(:,2); %y coordinates of points in image a
+ub=Points_b(:,1); %x coordinates of points in image b
+vb=Points_b(:,2); %y coordinates of points in image b
+
+L=size(Points_a,1);
+l1=ones(L,1);
+A=[ub.*ua, ub.*va, ub, vb.*ua, vb.*va, vb, ua, va, l1]; % notice that is F_matrix map B to A 
+[U,S,V]=svd(A);
+f=V(:,end);
+F=reshape(f,[3 3])';
+[UU,SS,VV]=svd(F); % solve by least square
+SS(3,3)=0;	% restrain rank(F) to be 2
+F_matrix=UU*SS*VV';
+...
+</code></pre>
+<p>		Epipolar lines according to estimated fundamental matrix.</p>
+<table border=1>
+<tr>
+<td>
+<img src="3_003.jpg" width="48%"/>
+<img src="3_004.jpg"  width="48%"/>
+</td>
+</tr>
+</table>
+
+<h3>PART3 RANSAC based on SIFT matching correspondences. </h3>
+<p> 	Compared with PART2, the matching correspondences found by simple SIFT matching (similar to last project) is rough and include many bad matches. Hence RANSAC method is applied to this situation to find best fundamental matrix and reject those outlying matches. The choices that might influence the accuracy of RANSAC is the threshold value (to define outliers) and the iteration times for the whole procedure. </p>
+<p>		Detail process is as follows:</p>
+<pre><code>
+...
+itera = 2000;  %iteration times
+sigma=0.01;    %threshold of deviation for RANSAC
+sample=8; %%adopt 8point algorithm within the loop
+
+L=size(matches_a,1);
+count=zeros(itera,1); % number of found inliers in each iteration
+
+sample_a=[];	% the random sample points for every iteration
+sample_b=[];
+temp_F=[];		% fundamental matrix found by present sample points
+Best_Fmatrix=zeros(3,3);	% F_matrix with most inliers (could be updated ones more inliers are found)
+Max_inlier=0;
+inlier=[];		% inlying points by current F_matrix
+
+for K=1:1:itera    
+    % step1 - find sample calcu the F
+    cc=randperm(L);	 % use randperm to produce non-repetitive 8 sample matches
+    c=cc(1:sample);		% take first 8 of the random sequence
+    sample_a=matches_a(c,:);
+    sample_b=matches_b(c,:);
+    temp_F = estimate_fundamental_matrix(sample_a,sample_b);  % call the function in PART2
+    %temp_F = estimate_fundamental_matrix_normal(sample_a,sample_b); % normalized fundamental matrix 
+    % step2 - calcu the ri for every point 
+    ri=[];		% deviation of every pairs from present epipolar plane
+    for m=1:1:L
+        xa=[matches_a(m,:)';1];
+        xb=[matches_b(m,:)';1];
+        dis=sum(abs(xb'*temp_F*xa).^2)^(1/2);  %calculate deviation
+        ri=[ri;dis];
+    end
+    % step3 - decide inliers
+    fin=ri-sigma;		%find matches within the threshold sigma
+    ind=find(fin &lt;= 0);
+    Ninlier=length(ind);
+    count(K)=Ninlier;
+    % step4 - update max and fill in inlier
+    if Ninlier>Max_inlier
+        Max_inlier=Ninlier;
+        Best_Fmatrix=temp_F;
+        inlier=ind;
+    else
+    end    
+end
+%%%%%%%%%%%%%%%%
+inliers_a=matches_a(inlier,:);
+inliers_b=matches_b(inlier,:);
+</code></pre>
+
+<p>		Also, in suppressing bad matches, different sigma value are used. Result is as follow: </p>
+<p>		Mont Rushmore Epipolar lines and corresponding matches: (sigma= 0.02, iteration times 500)</p>
+<p>		Resulting F_matrix: [ -9.5476E-7 &nbsp;	  2.7928E-5 &nbsp;  -0.0347</p>
+<p>		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;		      -2.7843E-5 &nbsp; -2.3405E-6	&nbsp;  0.03446</p>
+<p>		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;		      0.03433	&nbsp; -0.0309	&nbsp; 0.9977 ]. </p>
+<table border=1>
+<tr>
+<td>
+<img src="3_4.jpg" width="48%"/>
+<img src="3_5.jpg"  width="48%"/>
+</td>
+</tr>
+</table>
+
+<p>		Dotre Dame Epipolar lines and corresponding matches: (sigma =0.08, iteration times 500)</p>
+<p>		Resulting F_matrix: [ -5.1334E-6	&nbsp; 2.3517E-5  &nbsp; -0.00625</p>
+<p>		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;			-2.8049E-5	&nbsp; -1.2322E-6	&nbsp; 0.0059</p>
+<p>		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;		    0.0103	&nbsp;-0.0046	&nbsp;-0.6098 ]. </p>
+<table border=1>
+<tr>
+<td>
+<img src="3_10.jpg" width="48%"/>
+<img src="3_11.jpg"  width="48%"/>
+<img src="3_10_1.jpg"  width="36%"/>
+</td>
+</tr>
+</table>
+
+<p>		Gaudi Epipolar lines and corresponding matches: (sigma 0.04, iteration times 500)</p>
+<p>		Resulting F_matrix: [ 2.7044E-7	 &nbsp; 3.4979E-7 &nbsp;-6.1151E-4</p>
+<p>		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;		     3.4169E-7	 &nbsp; 2.7217E-7 &nbsp;-6.1934E-4</p>
+<p>		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;				  -4.7907E-4 &nbsp;	-5.2742E-4	&nbsp;0.9999 ]. </p>
+<table border=1>
+<tr>
+<td>
+<img src="3_17.jpg" width="48%"/>
+<img src="3_18.jpg"  width="48%"/>
+<img src="3_16.jpg"  width="36%"/>
+</td>
+</tr>
+</table>
+
+<p>		According to the result above, we can find the correspondences shown in Guadi still contains bad matches due to the scale difference. Hence, we should adopt normalized fundamental matrix to rid of this problem, as follows in PART4. </p>
+
+<h3>PART4 normalized eight-point algorithm and RANSAC</h3>
+<p>		Normalized 8-point algorithm in fundamental matrix estimation can improve the accuracy of local correspondences, especially in the image pairs different in scale( such as Gaudi ).</p>
+<p>		The procedure include: center the image data at origin and normalize the standard deviation (with means subtracted) and calculate normalized fundamental matrix, if Ta and Tb are the normalizing transform of image A and B, apply Tat*F*Tb to get origin fundamental matrix. The detailed process is shown as follow:</p>
+<pre><code>
+...
+ua=Points_a(:,1);
+va=Points_a(:,2);
+ub=Points_b(:,1);
+vb=Points_b(:,2);
+L=size(Points_a,1);
+l=ones(L,1);
+%%%%%%%%%%%%%%%
+%change to normalized coordinate
+cax=sum(ua)/L;			% the mean of A image x coordinates
+cay=sum(va)/L;			% the mean of A image y coordinates
+disa=((ua-cax).^2+(va-cay).^2).^(1/2);			
+stda=std(disa);			% standard divation of A image
+Ta=diag([1/stda,1/stda,1])*[1, 0, -cax; 0, 1, -cay; 0, 0, 1];		% normalization transform matrix of A image
+
+UA=Ta*([Points_a,l]');
+ua=UA(1,:)';
+va=UA(2,:)';			% the normalized points of image A
+
+cbx=sum(ub)/L;			% the mean of B image x coordinates
+cby=sum(vb)/L;			% the mean of B image y coordinates
+disb=((ub-cbx).^2+(vb-cby).^2).^(1/2);
+stdb=std(disb);			% the normalized points of image B
+Tb=diag([1/stdb,1/stdb,1])*[1, 0, -cbx; 0, 1, -cby; 0, 0, 1];		% normalization transform matrix of B image
+
+UB=Tb*([Points_b,l]');
+ub=UB(1,:)';
+vb=UB(2,:)';
+
+% 8point
+l1=ones(L,1);
+%A=[ua.*ub, ua.*vb, ua, va.*ub, va.*vb, va, ub, vb, l1];
+A=[ub.*ua, ub.*va, ub, vb.*ua, vb.*va, vb, ua, va, l1];
+[U,S,V]=svd(A);
+f=V(:,end);
+F=reshape(f,[3 3])';		% normalized F matrix
+
+[UU,SS,VV]=svd(F);
+SS(3,3)=0;
+F=UU*SS*VV';
+F_matrix=Ta'*F*Tb;			% origin F matrix
+...
+</code></pre>
+<p>		Results can be shown as follows: </p>
+<p>		Mont Rushmore Epipolar lines and corresponding matches: (sigma= 0.06, iteration times 500)</p>
+<p>		Resulting F_matrix: [ 7.8123E-8	&nbsp;-8.0567E-6	&nbsp;0.0098</p>
+<p>		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;				  7.1976E-6	&nbsp;4.91923E-7	&nbsp;-0.0072</p>
+<p>		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;				  -0.0093	&nbsp;0.0072	&nbsp;-0.2875 ]. </p>
+<table border=1>
+<tr>
+<td>
+<img src="3_7.jpg" width="48%"/>
+<img src="3_8.jpg"  width="48%"/>
+</td>
+</tr>
+</table>
+
+<p>		Dotre Dame Epipolar lines and corresponding matches:( sigma =0.03, iteration times 500 )</p>
+<p>		Resulting F_matrix: [ 4.0009E-7	 &nbsp;1.0765E-5	&nbsp;-0.0081</p>
+<p>		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;			  -1.2448E-5 &nbsp;-4.3438E-7	&nbsp;0.0135</p>
+<p>		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;			  0.0067	 &nbsp;-0.01135		&nbsp;0.9997 ]. </p>
+<table border=1>
+<tr>
+<td>
+<img src="3_13.jpg" width="48%"/>
+<img src="3_14.jpg"  width="48%"/>
+<img src="3_15.jpg"  width="36%"/>
+</td>
+</tr>
+</table>
+
+<p>		Gaudi Epipolar lines and corresponding matches: (sigma = 0.04, iteration times 2000)</p>
+<p>		Resulting F_matrix: [ 1.0995E-6	&nbsp;  4.2566E-6	&nbsp;-0.0013</p>
+<p>		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;			  -4.9361E-6  &nbsp;-4.2696E-8	&nbsp;0.0034</p>
+<p>		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;			  4.5390E-4	&nbsp;-0.0019	&nbsp;-0.0591 ]. </p>
+<table border=1>
+<tr>
+<td>
+<img src="3-19.jpg" width="48%"/>
+<img src="3-20.jpg"  width="48%"/>
+<img src="3_21.jpg"  width="36%"/>
+</td>
+</tr>
+</table>
+
+<p>		From the results above, it can be seen that for first two pairs, normalized fundamental matrix estimation have less inaccurate matches than the origin one, given similar amount of total resulting matching( 333 for normalized Mont Rushmore, 322 for unnormalized Mont Rushmore; 182 for normalized Notre Dame, 204 for unnormalized Notre Dame). As for the scale varied Gaudi images, the result is greatly improved and can provide much better matches than former. </p>
+
+<body>
+<div style="float: left; padding: 0px">
+<div id="tail" >
+<div id="headersub">
+<h5>Thank you for your patience. For any problem, my email is zluo60@gatech.edu.</h5>
+</div>
+</div>
+</div>
+</body>
+
+</div>
+</body>
+</html>
